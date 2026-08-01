@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MessageCircle, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Check, Minus, Plus } from 'lucide-react';
+import { MessageCircle, ChevronLeft, ChevronRight, AlertCircle, ShoppingBag, Check, Minus, Plus, Share2 } from 'lucide-react';
 import { registerWhatsappClick, registerAccess } from '@/app/actions';
 import { useCart } from './CartProvider';
 
@@ -12,6 +12,7 @@ export default function StoreProductDetail({ product, config }) {
   const [showWarning, setShowWarning] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { addItem } = useCart();
 
   // Registra o acesso quando a página do produto é aberta
@@ -97,6 +98,22 @@ export default function StoreProductDetail({ product, config }) {
     addItem(product, selectedColor, selectedSize, quantity);
     setAddedToCart(true);
     window.setTimeout(() => setAddedToCart(false), 2000);
+  }
+
+  async function handleShare() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: product.nome, text: `Confira ${product.nome} na Amma Fit`, url });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+
+    await navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
   }
 
   return (
@@ -253,6 +270,10 @@ export default function StoreProductDetail({ product, config }) {
           >
             <MessageCircle className="w-6 h-6" />
             <span>Comprar pelo WhatsApp</span>
+          </button>
+          <button type="button" onClick={handleShare} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3.5 font-semibold text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900">
+            {linkCopied ? <Check className="h-5 w-5 text-emerald-600" /> : <Share2 className="h-5 w-5" />}
+            <span>{linkCopied ? 'Link copiado' : 'Compartilhar produto'}</span>
           </button>
           <div className="flex items-center justify-center gap-2 mt-4 text-xs font-medium text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>

@@ -1,31 +1,12 @@
 'use client';
 
-import { Eye, Package, MessageCircle } from 'lucide-react';
-import { registerWhatsappClick } from '@/app/actions';
+import { Eye, Package } from 'lucide-react';
 
-export default function ProductCard({ product, config, onEdit }) {
+export default function ProductCard({ product, onEdit }) {
   const primaryImage = (product.imagens && product.imagens.length > 0) 
     ? product.imagens[0] 
     : product.imagem_url || '';
   const hasOffer = Boolean(product.oferta_ativa) && Number(product.preco_original) > Number(product.preco);
-
-  const handleWhatsappClick = async (e) => {
-    e.stopPropagation(); // Prevents opening the edit modal
-    
-    // Register click in the background
-    registerWhatsappClick(product.id).catch(console.error);
-
-    // Prepare message and URL
-    const num = config?.whatsapp_numero || '';
-    const msgText = product.texto_whatsapp 
-      ? product.texto_whatsapp 
-      : `Olá! Vi o ${product.nome} no catálogo e gostaria de mais informações.`;
-      
-    const url = `https://wa.me/${num.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msgText)}`;
-    
-    // Open WhatsApp in new tab
-    window.open(url, '_blank');
-  };
 
   return (
     <div 
@@ -68,14 +49,6 @@ export default function ProductCard({ product, config, onEdit }) {
           </span>
         </div>
         
-        {/* WhatsApp Button */}
-        <button 
-          onClick={handleWhatsappClick}
-          className="mt-4 w-full py-2.5 bg-white border border-slate-200 text-[#1A1A1A] hover:bg-slate-50 hover:border-[#1A1A1A]/30 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-sm group/btn"
-        >
-          <MessageCircle className="w-4 h-4 text-slate-400 group-hover/btn:text-[#4A5D4E] transition-colors" />
-          <span className="text-sm">Link do Zap</span>
-        </button>
       </div>
     </div>
   );

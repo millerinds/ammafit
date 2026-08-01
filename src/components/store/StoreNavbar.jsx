@@ -1,21 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Search, Menu, X, ShoppingBag } from 'lucide-react';
 import CartDrawer from './CartDrawer';
 import { useCart } from './CartProvider';
 
-export default function StoreNavbar({ activeCategory, onCategoryChange, config, categories = [] }) {
+export default function StoreNavbar({ activeCategory, onCategoryChange, config, categories = [], searchQuery = '', onSearchChange }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(Boolean(searchQuery));
+  const searchInputRef = useRef(null);
   const { itemCount } = useCart();
   const categoryNames = categories.map((category) => category.nome);
   const configuredCategories = (config?.categorias_menu || []).filter((name) => categoryNames.includes(name));
   const mainCategories = configuredCategories.length > 0 ? configuredCategories : categoryNames.slice(0, 5);
   const extraCategories = categoryNames.filter((name) => !mainCategories.includes(name));
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   function handleCategoryClick(cat) {
     setMenuOpen(false);
@@ -76,7 +82,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
 
         {/* Direita: Busca + Hambúrguer mobile */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button type="button" className="text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
+          <button type="button" onClick={() => setSearchOpen((open) => !open)} aria-label={searchOpen ? 'Fechar busca' : 'Pesquisar produtos'} className="text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
             <Search className="w-5 h-5" />
           </button>
           <button type="button" onClick={() => setCartOpen(true)} aria-label={`Abrir carrinho com ${itemCount} itens`} className="relative text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
@@ -92,6 +98,16 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
           </button>
         </div>
       </div>
+
+      {searchOpen && (
+        <div className="border-t border-slate-100 bg-white px-4 py-3 shadow-sm">
+          <div className="mx-auto flex max-w-2xl items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 focus-within:border-slate-400 focus-within:bg-white">
+            <Search className="h-4 w-4 flex-shrink-0 text-slate-400" />
+            <input ref={searchInputRef} type="search" value={searchQuery} onChange={(event) => onSearchChange?.(event.target.value)} placeholder="Buscar por nome, código, categoria, cor ou tamanho..." className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none" />
+            {searchQuery && <button type="button" onClick={() => onSearchChange?.('')} aria-label="Limpar busca" className="rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button>}
+          </div>
+        </div>
+      )}
 
       {/* Mobile Dropdown Menu */}
       {menuOpen && (

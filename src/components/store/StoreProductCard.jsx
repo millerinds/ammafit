@@ -1,19 +1,36 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { Check, Share2 } from 'lucide-react';
 
 export default function StoreProductCard({ product }) {
+  const [linkCopied, setLinkCopied] = useState(false);
   const primaryImage = (product.imagens && product.imagens.length > 0) 
     ? product.imagens[0] 
     : product.imagem_url || 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=400&auto=format&fit=crop';
   const hasOffer = Boolean(product.oferta_ativa) && Number(product.preco_original) > Number(product.preco);
   const discount = hasOffer ? Math.round((1 - Number(product.preco) / Number(product.preco_original)) * 100) : 0;
 
+  async function handleShare() {
+    const url = `${window.location.origin}/produto/${product.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: product.nome, text: `Confira ${product.nome} na Amma Fit`, url });
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+      }
+    }
+
+    await navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
+  }
+
   return (
-    <Link 
-      href={`/produto/${product.id}`}
-      className="group cursor-pointer flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-500"
-    >
+    <article className="group relative flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-500">
+      <Link href={`/produto/${product.id}`} className="flex cursor-pointer flex-col gap-3">
       <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-slate-100">
         <img 
           src={primaryImage} 
@@ -45,6 +62,11 @@ export default function StoreProductCard({ product }) {
           Tenho Interesse
         </span>
       </div>
-    </Link>
+      </Link>
+      <button type="button" onClick={handleShare} aria-label={`Compartilhar ${product.nome}`} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900">
+        {linkCopied ? <Check className="h-4 w-4 text-emerald-600" /> : <Share2 className="h-4 w-4" />}
+        {linkCopied ? 'Link copiado' : 'Compartilhar'}
+      </button>
+    </article>
   );
 }

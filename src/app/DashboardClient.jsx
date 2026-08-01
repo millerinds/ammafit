@@ -7,7 +7,7 @@ import ProductModal from '@/components/ProductModal';
 import ConfigModal from '@/components/ConfigModal';
 import LayoutModal from '@/components/LayoutModal';
 import CategoryModal from '@/components/CategoryModal';
-import { FolderPlus, LogOut, Package, Palette, Settings } from 'lucide-react';
+import { FolderPlus, LogOut, Package, Palette, Search, Settings, X } from 'lucide-react';
 import { logoutAction } from './admin/auth-actions';
 
 export default function DashboardClient({ metrics, products, config, categories }) {
@@ -17,6 +17,11 @@ export default function DashboardClient({ metrics, products, config, categories 
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const normalizedSearch = productSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const filteredProducts = normalizedSearch
+    ? products.filter((product) => [product.nome, product.sku, product.categoria].some((value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(normalizedSearch)))
+    : products;
 
   const handleAddProduct = () => {
     setSelectedProduct(null);
@@ -97,10 +102,16 @@ export default function DashboardClient({ metrics, products, config, categories 
         <MetricsPanel metrics={metrics} />
 
         <div className="mt-12">
-          <h2 className="text-xl font-bold text-[#1A1A1A] mb-6">Produtos</h2>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="text-xl font-bold text-[#1A1A1A]">Produtos</h2><p className="mt-1 text-sm text-slate-500">{filteredProducts.length} de {products.length} produto(s)</p></div>
+            <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm focus-within:border-slate-400 sm:max-w-sm">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input type="search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Buscar nome, código ou categoria..." className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none" />
+              {productSearch && <button type="button" onClick={() => setProductSearch('')} aria-label="Limpar busca" className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>}
+            </div>
+          </div>
           <ProductGrid 
-            products={products} 
-            config={config}
+            products={filteredProducts}
             onAddProduct={handleAddProduct}
             onEditProduct={handleEditProduct}
           />

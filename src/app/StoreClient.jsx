@@ -8,10 +8,24 @@ import StoreProductGrid from '@/components/store/StoreProductGrid';
 export default function StoreClient({ products, config, categories, initialCategory = 'Todos' }) {
   const validInitialCategory = categories.some((category) => category.nome === initialCategory) ? initialCategory : 'Todos';
   const [activeCategory, setActiveCategory] = useState(validInitialCategory);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredProducts = activeCategory === 'Todos'
+  const normalizeText = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const normalizedSearch = normalizeText(searchQuery.trim());
+
+  const categoryProducts = activeCategory === 'Todos'
     ? products
     : products.filter(p => p.categoria === activeCategory);
+  const filteredProducts = normalizedSearch
+    ? categoryProducts.filter((product) => normalizeText([
+        product.nome,
+        product.sku,
+        product.categoria,
+        product.descricao,
+        ...(product.cores || []),
+        ...(product.tamanhos || []),
+      ].join(' ')).includes(normalizedSearch))
+    : categoryProducts;
 
   return (
     <div
@@ -25,7 +39,7 @@ export default function StoreClient({ products, config, categories, initialCateg
       }}
       className="min-h-screen font-sans selection:bg-[var(--store-primary)]/20"
     >
-      <StoreNavbar activeCategory={activeCategory} onCategoryChange={setActiveCategory} config={config} categories={categories} />
+      <StoreNavbar activeCategory={activeCategory} onCategoryChange={setActiveCategory} config={config} categories={categories} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       
       <main>
         {activeCategory === 'Todos' && (
@@ -35,7 +49,7 @@ export default function StoreClient({ products, config, categories, initialCateg
         <section id="produtos" className={`max-w-7xl mx-auto scroll-mt-20 px-4 sm:px-6 lg:px-8 ${activeCategory === 'Todos' ? 'py-16 md:py-24' : 'py-10 md:py-14'}`}>
           <div className="flex flex-col items-center mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <h2 className="text-3xl font-bold tracking-tight text-[#1A1A1A] mb-4 text-center">
-              {activeCategory === 'Todos' ? 'Nossas Peças' : activeCategory}
+              {searchQuery.trim() ? `Resultados para “${searchQuery.trim()}”` : activeCategory === 'Todos' ? 'Nossas Peças' : activeCategory}
             </h2>
             <div className="w-16 h-1 rounded-full" style={{ backgroundColor: config?.cor_primaria || '#4A5D4E' }}></div>
           </div>

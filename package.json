@@ -6,13 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "db:migrate:local": "wrangler d1 migrations apply ammafit-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ammafit-db --remote"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
+    "@opennextjs/cloudflare": "^1.20.2",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
-    "next": "16.2.4",
+    "next": "^16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0"
@@ -20,7 +25,9 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4"
+    "eslint-config-next": "^16.2.11",
+    "playwright-core": "^1.62.1",
+    "tailwindcss": "^4",
+    "wrangler": "^4.118.0"
   }
 }

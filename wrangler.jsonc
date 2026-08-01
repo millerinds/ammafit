@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ammafit",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "ammafit" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ammafit-db",
+      "database_id": "df5d68b4-62e5-4047-b5e7-64c9c1fcecd3",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

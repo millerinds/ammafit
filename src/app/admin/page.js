@@ -1,9 +1,13 @@
 import DashboardClient from '../DashboardClient';
 import { getProducts, getMetrics, getConfig, getCategories } from '../actions';
+import { redirect } from 'next/navigation';
+import { isAdminAuthenticated } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminHome() {
+  if (!(await isAdminAuthenticated())) redirect('/admin/login');
+
   const products = await getProducts();
   const metrics = await getMetrics();
   const config = await getConfig();

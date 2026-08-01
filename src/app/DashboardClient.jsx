@@ -7,7 +7,8 @@ import ProductModal from '@/components/ProductModal';
 import ConfigModal from '@/components/ConfigModal';
 import LayoutModal from '@/components/LayoutModal';
 import CategoryModal from '@/components/CategoryModal';
-import { FolderPlus, Package, Palette, Settings } from 'lucide-react';
+import { FolderPlus, LogOut, Package, Palette, Settings } from 'lucide-react';
+import { logoutAction } from './admin/auth-actions';
 
 export default function DashboardClient({ metrics, products, config, categories }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,6 +77,11 @@ export default function DashboardClient({ metrics, products, config, categories 
             >
               <Settings className="w-5 h-5" />
             </button>
+            <form action={logoutAction}>
+              <button type="submit" className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Sair do painel">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </form>
           </div>
         </div>
       </header>

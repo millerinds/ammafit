@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# local data and editor settings
+/estoque.db
+/estoque.db-shm
+/estoque.db-wal
+/.vscode/
+
 # vercel
 .vercel
 

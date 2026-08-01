@@ -2,8 +2,8 @@ import "./globals.css";
 import { CartProvider } from "@/components/store/CartProvider";
 
 export const metadata = {
-  title: "AmmaFit - Gestão de Estoque",
-  description: "Dashboard de Gestão de Estoque AmmaFit",
+  title: "Amma Fit - Loja Online",
+  description: "Loja online oficial da Amma Fit.",
 };
 
 export default function RootLayout({ children }) {

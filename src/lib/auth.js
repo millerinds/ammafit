@@ -50,7 +50,7 @@ export async function verifyAdminCredentials(username, password) {
   const config = getAuthConfig();
   const [iterationsValue, saltValue, storedHash] = config.passwordHash.split(':');
   const iterations = Number(iterationsValue);
-  if (!Number.isInteger(iterations) || iterations < 210000 || !saltValue || !storedHash) {
+  if (!Number.isInteger(iterations) || iterations < 100000 || !saltValue || !storedHash) {
     throw new Error('ADMIN_PASSWORD_HASH possui formato inválido.');
   }
 

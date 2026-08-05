@@ -31,6 +31,9 @@ export async function POST(request) {
   await cleanupMediaAssets();
   const formData = await request.formData();
   const file = formData.get('file');
+  const purpose = String(formData.get('purpose') || 'products');
+  const prefix = { product: 'products', products: 'products', logo: 'branding', banner: 'banners' }[purpose];
+  if (!prefix) return jsonError('Destino de upload inválido.');
   if (!(file instanceof File)) return jsonError('Selecione um arquivo de imagem.');
   if (!file.size) return jsonError('O arquivo está vazio.');
   if (file.size > MAX_BYTES) return jsonError('A imagem otimizada deve ter no máximo 5 MB.', 413);
@@ -38,7 +41,7 @@ export async function POST(request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const detectedType = detectedImageType(bytes);
   if (!detectedType || detectedType !== file.type) return jsonError('O conteúdo do arquivo não corresponde a uma imagem válida.', 415);
-  const reference = await uploadProductImage(bytes, detectedType);
+  const reference = await uploadProductImage(bytes, detectedType, prefix);
   try {
     await registerPendingAsset(reference.key);
   } catch (error) {

@@ -364,7 +364,7 @@ O script `npm run build` já inicia o Next.js com até 3 GB de heap. Feche proce
 
 ## Imagens de produtos no Cloudflare R2
 
-O painel otimiza as imagens para WebP no navegador (até 2000 px no maior lado), mas só faz o upload quando o administrador salva o produto. O D1 armazena referências, nunca os bytes. Registros antigos com arrays de URLs continuam compatíveis.
+O painel otimiza as imagens para WebP no navegador (até 2000 px no maior lado). Produtos enviam os arquivos ao salvar; logo e slides podem ser enviados no editor de layout. O D1 armazena referências, nunca os bytes. Registros antigos com arrays de URLs continuam compatíveis.
 
 Crie o bucket uma vez e aplique a nova migração antes de publicar o código:
 

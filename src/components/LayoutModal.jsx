@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Image as ImageIcon, Loader2, Monitor, Palette, Plus, Save, Smartphone, Trash2, X } from 'lucide-react';
+import { Image as ImageIcon, Loader2, Monitor, Palette, Plus, Save, Smartphone, Trash2, UploadCloud, X } from 'lucide-react';
 import { saveLayoutConfig } from '@/app/actions';
 import SearchableSelect from './SearchableSelect';
 
 const EMPTY_BANNER = {
   imagem_desktop: '',
   imagem_mobile: '',
+  imagem_desktop_key: '',
+  imagem_mobile_key: '',
   titulo: '',
   subtitulo: '',
   link_tipo: 'none',
@@ -39,6 +41,8 @@ export default function LayoutModal({ isOpen, onClose, initialConfig, products, 
 function LayoutModalContent({ onClose, initialConfig, products, categories }) {
   const [formData, setFormData] = useState(() => ({
     logo_url: initialConfig?.logo_url || '',
+    logo_object_key: initialConfig?.logo_object_key || '',
+    cabecalho_texto: initialConfig?.cabecalho_texto || 'AMMA FIT',
     cor_primaria: initialConfig?.cor_primaria || '#4A5D4E',
     cor_secundaria: initialConfig?.cor_secundaria || '#1A1A1A',
     cor_fundo: initialConfig?.cor_fundo || '#F8F9FA',
@@ -48,10 +52,51 @@ function LayoutModalContent({ onClose, initialConfig, products, categories }) {
     logo_largura_mobile: initialConfig?.logo_largura_mobile || 120,
   }));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingField, setUploadingField] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
   const productOptions = products.map((product) => ({ value: String(product.id), label: `${product.nome} — ${product.sku || `#${product.id}`}` }));
   const categoryOptions = categories.map((category) => ({ value: category.nome, label: category.nome }));
   const filteredCategories = categories.filter((category) => category.nome.toLocaleLowerCase('pt-BR').includes(categorySearch.toLocaleLowerCase('pt-BR')));
+
+  async function optimizeAndUpload(file, purpose) {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type)) throw new Error('Use uma imagem JPEG, PNG, WebP ou AVIF.');
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
+    if (!blob || blob.size > 5 * 1024 * 1024) throw new Error('A imagem não pôde ser otimizada para menos de 5 MB.');
+    const body = new FormData();
+    body.append('file', new File([blob], 'layout.webp', { type: 'image/webp' }));
+    body.append('purpose', purpose);
+    const response = await fetch('/api/admin/product-images', { method: 'POST', body });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Falha ao enviar a imagem.');
+    return result;
+  }
+
+  async function uploadLogo(file) {
+    if (!file) return;
+    setUploadingField('logo');
+    try {
+      const result = await optimizeAndUpload(file, 'logo');
+      setFormData((current) => ({ ...current, logo_url: result.previewUrl, logo_object_key: result.reference.key }));
+    } catch (error) { alert(error.message); } finally { setUploadingField(''); }
+  }
+
+  async function uploadBanner(file, index, target) {
+    if (!file) return;
+    const fieldId = `banner-${index}-${target}`;
+    setUploadingField(fieldId);
+    try {
+      const result = await optimizeAndUpload(file, 'banner');
+      updateBanner(index, target, result.previewUrl);
+      updateBanner(index, `${target}_key`, result.reference.key);
+    } catch (error) { alert(error.message); } finally { setUploadingField(''); }
+  }
 
   function toggleMenuCategory(categoryName) {
     setFormData((current) => {
@@ -119,9 +164,17 @@ function LayoutModalContent({ onClose, initialConfig, products, categories }) {
           <div className="mx-auto max-w-4xl space-y-6">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5 flex items-center gap-2"><ImageIcon className="h-5 w-5" /><h3 className="font-bold">Identidade visual</h3></div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">URL da logo</label>
-              <input type="url" value={formData.logo_url} onChange={(event) => setFormData({ ...formData, logo_url: event.target.value })} placeholder="https://exemplo.com/logo.png" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-slate-500" />
-              <p className="mt-1 text-xs text-slate-500">Recomendado: PNG ou SVG com fundo transparente, proporção horizontal de aproximadamente 3:1.</p>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Texto do cabeçalho quando não houver logo</label>
+              <input type="text" maxLength="40" value={formData.cabecalho_texto} onChange={(event) => setFormData({ ...formData, cabecalho_texto: event.target.value })} placeholder="AMMA FIT" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-slate-500" />
+              <div className="mt-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+                <UploadCloud className="mx-auto h-7 w-7 text-slate-400" />
+                <p className="mt-2 text-sm font-medium">Envie a logo da loja</p>
+                <p className="text-xs text-slate-500">JPEG, PNG, WebP ou AVIF; transparência é preservada</p>
+                <label className="mt-3 inline-flex cursor-pointer items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{uploadingField === 'logo' ? 'Enviando...' : 'Selecionar logo'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={Boolean(uploadingField)} onChange={(event) => uploadLogo(event.target.files?.[0])} className="hidden" /></label>
+              </div>
+              <details className="mt-3 rounded-xl border border-slate-200 p-3"><summary className="cursor-pointer text-sm text-slate-600">Usar URL externa para a logo</summary><input type="url" value={formData.logo_url} onChange={(event) => setFormData({ ...formData, logo_url: event.target.value, logo_object_key: '' })} placeholder="https://exemplo.com/logo.png" className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none" /></details>
+              {formData.logo_url && <button type="button" onClick={() => setFormData({ ...formData, logo_url: '', logo_object_key: '' })} className="mt-2 text-sm font-medium text-rose-600">Remover logo e usar o texto do cabeçalho</button>}
+              <p className="mt-1 text-xs text-slate-500">Recomendado: fundo transparente e proporção horizontal de aproximadamente 3:1.</p>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">Largura no computador: {formData.logo_largura_desktop}px<input type="range" min="80" max="240" step="5" value={formData.logo_largura_desktop} onChange={(event) => setFormData({ ...formData, logo_largura_desktop: Number(event.target.value) })} className="mt-2 w-full accent-slate-900" /></label>
                 <label className="text-sm font-medium text-slate-700">Largura no celular: {formData.logo_largura_mobile}px<input type="range" min="60" max="180" step="5" value={formData.logo_largura_mobile} onChange={(event) => setFormData({ ...formData, logo_largura_mobile: Number(event.target.value) })} className="mt-2 w-full accent-slate-900" /></label>
@@ -182,8 +235,8 @@ function LayoutModalContent({ onClose, initialConfig, products, categories }) {
                     <article key={banner.id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
                       <div className="mb-4 flex items-center justify-between"><h4 className="font-semibold">Slide {index + 1}</h4><button type="button" onClick={() => removeBanner(index)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" aria-label={`Excluir slide ${index + 1}`}><Trash2 className="h-4 w-4" /></button></div>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <label className="text-sm font-medium text-slate-700">Imagem para computador *<input required type="url" value={banner.imagem_desktop} onChange={(event) => updateBanner(index, 'imagem_desktop', event.target.value)} placeholder="https://..." className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none" /></label>
-                        <label className="text-sm font-medium text-slate-700">Imagem para celular<input type="url" value={banner.imagem_mobile} onChange={(event) => updateBanner(index, 'imagem_mobile', event.target.value)} placeholder="Opcional; usa a imagem desktop se vazio" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none" /></label>
+                        <label className="text-sm font-medium text-slate-700">Imagem para computador *<span className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-white px-3 py-4"><UploadCloud className="h-4 w-4" />{uploadingField === `banner-${index}-imagem_desktop` ? 'Enviando...' : 'Selecionar imagem'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" disabled={Boolean(uploadingField)} onChange={(event) => uploadBanner(event.target.files?.[0], index, 'imagem_desktop')} /></span>{banner.imagem_desktop && <img src={banner.imagem_desktop} alt="Prévia desktop" className="mt-2 h-24 w-full rounded-lg object-cover" />}<input type="url" value={banner.imagem_desktop} onChange={(event) => { updateBanner(index, 'imagem_desktop', event.target.value); updateBanner(index, 'imagem_desktop_key', ''); }} placeholder="Ou cole uma URL externa" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 outline-none" /></label>
+                        <label className="text-sm font-medium text-slate-700">Imagem para celular<span className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-white px-3 py-4"><UploadCloud className="h-4 w-4" />{uploadingField === `banner-${index}-imagem_mobile` ? 'Enviando...' : 'Selecionar imagem'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" disabled={Boolean(uploadingField)} onChange={(event) => uploadBanner(event.target.files?.[0], index, 'imagem_mobile')} /></span>{banner.imagem_mobile && <img src={banner.imagem_mobile} alt="Prévia mobile" className="mt-2 h-24 w-full rounded-lg object-cover" />}<input type="url" value={banner.imagem_mobile} onChange={(event) => { updateBanner(index, 'imagem_mobile', event.target.value); updateBanner(index, 'imagem_mobile_key', ''); }} placeholder="Opcional; usa a imagem desktop" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 outline-none" /></label>
                         <label className="text-sm font-medium text-slate-700">Título<input type="text" value={banner.titulo} onChange={(event) => updateBanner(index, 'titulo', event.target.value)} placeholder="Nova coleção" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none" /></label>
                         <label className="text-sm font-medium text-slate-700">Texto de apoio<input type="text" value={banner.subtitulo} onChange={(event) => updateBanner(index, 'subtitulo', event.target.value)} placeholder="Conforto e movimento" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none" /></label>
                         <label className="text-sm font-medium text-slate-700">Ao clicar em “Saiba mais”<SearchableSelect value={banner.link_tipo} onChange={(value) => updateBanner(index, 'link_tipo', value)} options={LINK_TYPE_OPTIONS} searchPlaceholder="Buscar tipo de destino..." /></label>
@@ -201,7 +254,7 @@ function LayoutModalContent({ onClose, initialConfig, products, categories }) {
 
         <div className="flex shrink-0 justify-end gap-3 border-t border-slate-200 bg-white px-4 py-4 sm:px-6">
           <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-xl px-4 py-2.5 font-medium text-slate-600 hover:bg-slate-100">Cancelar</button>
-          <button form="layout-form" type="submit" disabled={isSubmitting} className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-5 py-2.5 font-semibold text-white disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSubmitting ? 'Salvando...' : 'Salvar layout'}</button>
+          <button form="layout-form" type="submit" disabled={isSubmitting || Boolean(uploadingField)} className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-5 py-2.5 font-semibold text-white disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSubmitting ? 'Salvando...' : uploadingField ? 'Aguarde o upload...' : 'Salvar layout'}</button>
         </div>
       </div>
     </div>

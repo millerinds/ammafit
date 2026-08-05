@@ -177,6 +177,8 @@ export async function getConfig() {
   return {
     ...config,
     logo_url: config.logo_url || '',
+    logo_object_key: config.logo_object_key || '',
+    cabecalho_texto: config.cabecalho_texto || 'AMMA FIT',
     cor_primaria: config.cor_primaria || '#4A5D4E',
     cor_secundaria: config.cor_secundaria || '#1A1A1A',
     cor_fundo: config.cor_fundo || '#F8F9FA',
@@ -233,21 +235,39 @@ export async function saveConfig(data) {
 
 export async function saveLayoutConfig(data) {
   await requireAdmin();
+  const current = await first('SELECT logo_object_key, banners FROM configuracoes WHERE id = 1');
   const logoUrl = String(data.logo_url || '').trim();
+  const logoObjectKey = String(data.logo_object_key || '').trim();
+  const headerText = String(data.cabecalho_texto || 'AMMA FIT').trim().slice(0, 40) || 'AMMA FIT';
   const primaryColor = /^#[0-9a-f]{6}$/i.test(data.cor_primaria) ? data.cor_primaria : '#4A5D4E';
   const secondaryColor = /^#[0-9a-f]{6}$/i.test(data.cor_secundaria) ? data.cor_secundaria : '#1A1A1A';
   const backgroundColor = /^#[0-9a-f]{6}$/i.test(data.cor_fundo) ? data.cor_fundo : '#F8F9FA';
-  const banners = Array.isArray(data.banners) ? data.banners : [];
+  const banners = Array.isArray(data.banners) ? data.banners.slice(0, 12).map((banner) => ({
+    ...banner,
+    imagem_desktop: String(banner.imagem_desktop || '').trim(),
+    imagem_mobile: String(banner.imagem_mobile || '').trim(),
+    imagem_desktop_key: String(banner.imagem_desktop_key || '').trim(),
+    imagem_mobile_key: String(banner.imagem_mobile_key || '').trim(),
+  })) : [];
+  const oldBanners = current?.banners ? JSON.parse(current.banners) : [];
+  const oldKeys = [current?.logo_object_key, ...oldBanners.flatMap((banner) => [banner.imagem_desktop_key, banner.imagem_mobile_key])].filter(Boolean);
+  const nextKeys = [logoObjectKey, ...banners.flatMap((banner) => [banner.imagem_desktop_key, banner.imagem_mobile_key])].filter(Boolean);
+  await assertPendingAssets(nextKeys.filter((key) => !oldKeys.includes(key)));
   const menuCategories = Array.isArray(data.categorias_menu) ? data.categorias_menu.slice(0, 5) : [];
   const desktopLogoWidth = Math.min(240, Math.max(80, Number(data.logo_largura_desktop) || 160));
   const mobileLogoWidth = Math.min(180, Math.max(60, Number(data.logo_largura_mobile) || 120));
 
   await run(`
     UPDATE configuracoes
-    SET logo_url = ?, cor_primaria = ?, cor_secundaria = ?, cor_fundo = ?, banners = ?,
+    SET logo_url = ?, logo_object_key = ?, cabecalho_texto = ?, cor_primaria = ?, cor_secundaria = ?, cor_fundo = ?, banners = ?,
         categorias_menu = ?, logo_largura_desktop = ?, logo_largura_mobile = ?
     WHERE id = 1
-  `, logoUrl, primaryColor, secondaryColor, backgroundColor, JSON.stringify(banners), JSON.stringify(menuCategories), desktopLogoWidth, mobileLogoWidth);
+  `, logoUrl, logoObjectKey, headerText, primaryColor, secondaryColor, backgroundColor, JSON.stringify(banners), JSON.stringify(menuCategories), desktopLogoWidth, mobileLogoWidth);
+
+  await attachAssets(nextKeys.filter((key) => !oldKeys.includes(key)), null)
+    .catch((error) => console.error('Falha ao associar mídia do layout:', error));
+  await queueAndDeleteAssets(oldKeys.filter((key) => !nextKeys.includes(key)))
+    .catch((error) => console.error('Falha ao limpar mídia antiga do layout:', error));
 
   revalidatePath('/');
   revalidatePath('/admin');

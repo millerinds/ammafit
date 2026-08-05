@@ -51,7 +51,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
                 style={{ '--logo-mobile': `${config.logo_largura_mobile || 120}px`, '--logo-desktop': `${config.logo_largura_desktop || 160}px` }}
                 className="max-h-12 w-[var(--logo-mobile)] object-contain object-left lg:w-[var(--logo-desktop)]"
               />
-            ) : 'AMMA FIT'}
+            ) : (config?.cabecalho_texto || 'AMMA FIT')}
           </button>
         </div>
 

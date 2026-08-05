@@ -1,4 +1,9 @@
 const R2_KEY_PATTERN = /^products\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+const MEDIA_KEY_PATTERN = /^(products|branding|banners)\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+
+export function isManagedMediaKey(value) {
+  return typeof value === 'string' && MEDIA_KEY_PATTERN.test(value) && !value.includes('..');
+}
 
 export function isManagedImageKey(value) {
   return typeof value === 'string' && R2_KEY_PATTERN.test(value) && !value.includes('..');

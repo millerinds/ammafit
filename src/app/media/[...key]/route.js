@@ -1,5 +1,5 @@
 import { getProductImagesBucket, IMMUTABLE_CACHE } from '@/lib/product-images';
-import { isManagedImageKey } from '@/lib/product-image-refs';
+import { isManagedMediaKey } from '@/lib/product-image-refs';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +9,7 @@ function requestedKey(context) {
 
 async function getObject(context, head = false) {
   const key = await requestedKey(context);
-  if (!isManagedImageKey(key)) return null;
+  if (!isManagedMediaKey(key)) return null;
   return head ? getProductImagesBucket().head(key) : getProductImagesBucket().get(key);
 }
 

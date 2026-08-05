@@ -3,12 +3,16 @@
 import { all, first, run } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/auth';
+import { extractManagedImageKeys, imageReferencesToUrls, parseImageReferences, serializeImageReferences } from '@/lib/product-image-refs';
+import { assertPendingAssets, attachAssets, queueAndDeleteAssets } from '@/lib/product-images';
 
 function deserializeProduct(product) {
   if (!product) return null;
+  const imageReferences = parseImageReferences(product.imagens);
   return {
     ...product,
-    imagens: product.imagens ? JSON.parse(product.imagens) : [],
+    imagens: imageReferencesToUrls(imageReferences, process.env.R2_PUBLIC_BASE_URL),
+    imagem_refs: imageReferences,
     tamanhos: product.tamanhos ? JSON.parse(product.tamanhos) : [],
     cores: product.cores ? JSON.parse(product.cores) : [],
     dimensoes: product.dimensoes ? JSON.parse(product.dimensoes) : { width: '', height: '', length: '' },
@@ -65,7 +69,9 @@ export async function getRecommendedProducts(productId, limit = 10) {
 
 export async function addProduct(data) {
   await requireAdmin();
-  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagens, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const imageReferences = parseImageReferences(imagem_refs);
+  await assertPendingAssets(extractManagedImageKeys(imageReferences));
   validateOffer(preco, preco_original, oferta_ativa);
   
   // Validar SKU único
@@ -76,16 +82,27 @@ export async function addProduct(data) {
     }
   }
   
-  await run(`
+  const result = await run(`
     INSERT INTO produtos (nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagens, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, JSON.stringify(imagens || []), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp);
+  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp);
+  const productId = result.meta?.last_row_id;
+  if (productId) await attachAssets(extractManagedImageKeys(imageReferences), productId)
+    .catch((error) => console.error('Falha ao associar mídia; a limpeza posterior tentará novamente:', error));
   revalidatePath('/');
+  revalidatePath('/admin');
+  return productId;
 }
 
 export async function updateProduct(id, data) {
   await requireAdmin();
-  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagens, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const currentProduct = await first('SELECT imagens FROM produtos WHERE id = ?', id);
+  if (!currentProduct) throw new Error('Produto não encontrado.');
+  const previousKeys = extractManagedImageKeys(currentProduct.imagens);
+  const imageReferences = parseImageReferences(imagem_refs);
+  const nextKeys = extractManagedImageKeys(imageReferences);
+  await assertPendingAssets(nextKeys.filter((key) => !previousKeys.includes(key)));
   validateOffer(preco, preco_original, oferta_ativa);
   
   // Validar SKU único (excluindo o próprio produto)
@@ -100,14 +117,27 @@ export async function updateProduct(id, data) {
     UPDATE produtos
     SET nome = ?, descricao = ?, categoria = ?, preco = ?, preco_original = ?, oferta_ativa = ?, preco_custo = ?, sku = ?, estoque = ?, imagens = ?, tamanhos = ?, cores = ?, peso = ?, dimensoes = ?, slug = ?, texto_whatsapp = ?
     WHERE id = ?
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, JSON.stringify(imagens || []), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp, id);
+  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp, id);
+  await attachAssets(nextKeys.filter((key) => !previousKeys.includes(key)), id)
+    .catch((error) => console.error('Falha ao associar mídia; a limpeza posterior tentará novamente:', error));
+  await queueAndDeleteAssets(previousKeys.filter((key) => !nextKeys.includes(key)), id)
+    .catch((error) => console.error('Falha ao limpar mídia removida; a fila tentará novamente:', error));
   revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath(`/produto/${id}`);
 }
 
 export async function deleteProduct(id) {
   await requireAdmin();
+  const product = await first('SELECT imagens FROM produtos WHERE id = ?', id);
+  if (!product) return;
+  const keys = extractManagedImageKeys(product.imagens);
   await run('DELETE FROM produtos WHERE id = ?', id);
+  await queueAndDeleteAssets(keys, id)
+    .catch((error) => console.error('Falha ao limpar mídia do produto; a fila tentará novamente:', error));
   revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath(`/produto/${id}`);
 }
 
 export async function registerAccess(produtoId) {

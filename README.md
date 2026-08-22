@@ -32,14 +32,19 @@ Estas regras valem para qualquer pessoa ou assistente de IA, incluindo Claude e 
 - Links dos banners para produto, categoria ou seção da loja.
 - Página individual com cores, tamanhos, quantidade, oferta e recomendações.
 - Até 10 recomendações priorizadas por categoria, cor, tamanho e preço.
-- Carrinho salvo em `localStorage`, permanecendo no mesmo navegador após fechar o site.
-- Pedido de um produto ou de todo o carrinho pelo WhatsApp.
+- Tamanhos com estoque próprio: um produto, várias grades (P, M, G, 38...).
+- Sacola para provar salva em `localStorage`, permanecendo no mesmo navegador após fechar o site.
+- Solicitação de condicional por peça ou pela sacola inteira, sempre com tela de confirmação.
+- Peça sem disponibilidade e com unidade fora para prova aparece como **Em condicional**, não como esgotada.
+- Uma única conversa no WhatsApp com a relação completa das peças solicitadas.
 - Compartilhamento de produtos pelo recurso nativo do aparelho ou cópia do link.
 
 ### Painel administrativo
 
 - Acesso protegido por usuário e senha.
 - Cadastro, edição e exclusão de produtos.
+- Estoque por tamanho, com disponível, em condicional e vendidas em cada grade.
+- Seção **Condicionais** em `/admin/condicionais`, resolvendo cada peça como vendida, devolvida ou cancelada.
 - Cadastro e exclusão de categorias.
 - Busca administrativa por nome, SKU ou categoria.
 - Configuração do número e da mensagem do WhatsApp.
@@ -76,11 +81,44 @@ Arquivos principais:
 | `src/app/DashboardClient.jsx` | Interface principal do admin. |
 | `src/lib/db.js` | Binding e helpers assíncronos do Cloudflare D1. |
 | `src/lib/auth.js` | Validação de credenciais e sessão assinada. |
-| `src/components/store/CartProvider.jsx` | Estado persistente do carrinho. |
-| `src/components/store/CartDrawer.jsx` | Carrinho e pedido pelo WhatsApp. |
+| `src/app/condicional-actions.js` | Reserva, consulta e baixa de peças em condicional. |
+| `src/lib/estoque.js` | Variações de tamanho, disponibilidade e sincronia de `produtos.estoque`. |
+| `src/components/store/BagProvider.jsx` | Estado persistente da sacola para provar. |
+| `src/components/store/BagDrawer.jsx` | Sacola, confirmação e pedido pelo WhatsApp. |
+| `src/components/store/CondicionalConfirmModal.jsx` | Confirmação antes de reservar uma peça. |
+| `src/app/admin/condicionais/` | Painel de acompanhamento dos condicionais. |
 | `migrations/` | Histórico imutável do esquema e dados iniciais. |
 | `wrangler.jsonc` | Worker, bindings, D1 e compatibilidade do runtime. |
 | `open-next.config.ts` | Adaptador do Next.js para Cloudflare. |
+
+## Como o estoque e os condicionais funcionam
+
+Cada tamanho de um produto é uma linha em `produto_variacoes` com o próprio `estoque_fisico`.
+A disponibilidade **não** fica guardada em coluna: é sempre calculada, o que impede que um
+contador fique dessincronizado do que realmente está fora para prova.
+
+```text
+reservado  = peças de condicional_itens com status 'em_condicional'
+disponivel = estoque_fisico - reservado
+```
+
+| Ação no painel | Efeito |
+| --- | --- |
+| Devolvido | O item sai de `em_condicional`. O estoque físico não muda, então a peça volta ao disponível. |
+| Cancelar | Igual a devolvido: a peça volta ao disponível. |
+| Vendido | Baixa `estoque_fisico` em 1 e soma 1 em `vendido`. A peça não retorna à disponibilidade. |
+
+Cada unidade solicitada vira uma linha própria em `condicional_itens`: uma cliente que levou
+15 peças pode ter 2 marcadas como vendidas e 13 como devolvidas, item a item.
+
+A reserva é gravada por um único comando SQL que só insere se ainda houver unidade disponível.
+Duas clientes que confirmam ao mesmo tempo a última peça não conseguem reservar as duas: a
+segunda recebe o aviso de que a peça acabou de sair. A sacola é tudo ou nada — se qualquer
+peça ficou indisponível, o condicional inteiro é desfeito e as peças que faltaram são
+informadas na tela.
+
+`produtos.estoque` continua existindo como total agregado e passa a ser sempre a soma das
+variações, para que busca, métricas e telas antigas continuem funcionando.
 
 ## Preparação do ambiente local
 

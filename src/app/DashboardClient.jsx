@@ -7,7 +7,8 @@ import ProductModal from '@/components/ProductModal';
 import ConfigModal from '@/components/ConfigModal';
 import LayoutModal from '@/components/LayoutModal';
 import CategoryModal from '@/components/CategoryModal';
-import { FolderPlus, LogOut, Package, Palette, Search, Settings, X } from 'lucide-react';
+import { Clock, FolderPlus, LogOut, Package, Palette, Search, Settings, X } from 'lucide-react';
+import Link from 'next/link';
 import { logoutAction } from './admin/auth-actions';
 
 export default function DashboardClient({ metrics, products, config, categories }) {
@@ -59,6 +60,14 @@ export default function DashboardClient({ metrics, products, config, categories 
             <div className="text-sm font-medium text-slate-500 hidden sm:block">
               Catálogo via WhatsApp
             </div>
+            <Link
+              href="/admin/condicionais"
+              className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+              title="Peças que estão fora para prova"
+            >
+              <Clock className="w-4 h-4" />
+              <span className="hidden md:inline">Condicionais</span>
+            </Link>
             <button
               onClick={() => setIsCategoryOpen(true)}
               className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"

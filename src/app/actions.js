@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/auth';
 import { extractManagedImageKeys, imageReferencesToUrls, parseImageReferences, serializeImageReferences } from '@/lib/product-image-refs';
 import { assertPendingAssets, attachAssets, queueAndDeleteAssets } from '@/lib/product-images';
+import { getVariationsForProducts, saveProductVariations, TAMANHO_UNICO } from '@/lib/estoque';
 
 function deserializeProduct(product) {
   if (!product) return null;
@@ -19,6 +20,40 @@ function deserializeProduct(product) {
   };
 }
 
+// Junta o produto às suas variações de tamanho já com a disponibilidade calculada.
+function withVariations(product, variations) {
+  const variacoes = variations || [];
+  const estoqueFisicoTotal = variacoes.reduce((total, v) => total + v.estoque_fisico, 0);
+  const reservadoTotal = variacoes.reduce((total, v) => total + v.reservado, 0);
+  const disponivelTotal = variacoes.reduce((total, v) => total + v.disponivel, 0);
+
+  return {
+    ...product,
+    variacoes,
+    estoque_fisico_total: estoqueFisicoTotal,
+    reservado_total: reservadoTotal,
+    disponivel_total: disponivelTotal,
+    // Sem disponibilidade mas com peça fora para prova não é "esgotado":
+    // a vitrine mostra "Em condicional" (item 6 do pedido).
+    em_condicional: disponivelTotal === 0 && reservadoTotal > 0,
+  };
+}
+
+async function attachVariations(products) {
+  const grouped = await getVariationsForProducts(products.map((product) => product.id));
+  return products.map((product) => withVariations(product, grouped.get(product.id)));
+}
+
+// A grade de tamanhos passa a ser derivada das variações, mantendo produtos.tamanhos
+// preenchido para a busca da loja e para as recomendações continuarem funcionando.
+function sizesFromVariations(variacoes, fallback) {
+  const names = (Array.isArray(variacoes) ? variacoes : [])
+    .map((variation) => String(variation?.tamanho ?? '').trim())
+    .filter((tamanho) => tamanho && tamanho !== TAMANHO_UNICO);
+
+  return names.length > 0 ? names : (Array.isArray(fallback) ? fallback : []);
+}
+
 function validateOffer(price, originalPrice, active) {
   if (active && (!(Number(originalPrice) > 0) || Number(originalPrice) <= Number(price))) {
     throw new Error('Em uma oferta, o preço original deve ser maior que o preço promocional.');
@@ -27,14 +62,14 @@ function validateOffer(price, originalPrice, active) {
 
 export async function getProducts() {
   const products = await all('SELECT * FROM produtos ORDER BY id DESC');
-  return products.map(deserializeProduct);
+  return attachVariations(products.map(deserializeProduct));
 }
 
 export async function getProductById(id) {
   const p = await first('SELECT * FROM produtos WHERE id = ?', id);
   if (!p) return null;
-  
-  return deserializeProduct(p);
+
+  return (await attachVariations([deserializeProduct(p)]))[0];
 }
 
 export async function getRecommendedProducts(productId, limit = 10) {
@@ -46,7 +81,7 @@ export async function getRecommendedProducts(productId, limit = 10) {
   const targetSizes = new Set(target.tamanhos.map(normalize));
   const priceRange = Math.max(Number(target.preco) * 0.1, 10);
 
-  return (await all('SELECT * FROM produtos WHERE id != ?', productId))
+  const scored = (await all('SELECT * FROM produtos WHERE id != ?', productId))
     .map(deserializeProduct)
     .map((product) => ({
       product,
@@ -63,13 +98,15 @@ export async function getRecommendedProducts(productId, limit = 10) {
       a.priceBand - b.priceBand ||
       a.random - b.random
     )
-    .slice(0, Math.min(10, Math.max(1, limit)))
-    .map(({ product }) => product);
+    .slice(0, Math.min(10, Math.max(1, limit)));
+
+  return attachVariations(scored.map(({ product }) => product));
 }
 
 export async function addProduct(data) {
   await requireAdmin();
-  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp, variacoes } = data;
+  const sizes = sizesFromVariations(variacoes, tamanhos);
   const imageReferences = parseImageReferences(imagem_refs);
   await assertPendingAssets(extractManagedImageKeys(imageReferences));
   validateOffer(preco, preco_original, oferta_ativa);
@@ -85,8 +122,10 @@ export async function addProduct(data) {
   const result = await run(`
     INSERT INTO produtos (nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagens, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp);
+  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp);
   const productId = result.meta?.last_row_id;
+  // Grava a grade de tamanhos e realinha produtos.estoque com a soma das variações.
+  if (productId) await saveProductVariations(productId, variacoes);
   if (productId) await attachAssets(extractManagedImageKeys(imageReferences), productId)
     .catch((error) => console.error('Falha ao associar mídia; a limpeza posterior tentará novamente:', error));
   revalidatePath('/');
@@ -96,7 +135,8 @@ export async function addProduct(data) {
 
 export async function updateProduct(id, data) {
   await requireAdmin();
-  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp } = data;
+  const { nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagem_refs, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp, variacoes } = data;
+  const sizes = sizesFromVariations(variacoes, tamanhos);
   const currentProduct = await first('SELECT imagens FROM produtos WHERE id = ?', id);
   if (!currentProduct) throw new Error('Produto não encontrado.');
   const previousKeys = extractManagedImageKeys(currentProduct.imagens);
@@ -117,7 +157,8 @@ export async function updateProduct(id, data) {
     UPDATE produtos
     SET nome = ?, descricao = ?, categoria = ?, preco = ?, preco_original = ?, oferta_ativa = ?, preco_custo = ?, sku = ?, estoque = ?, imagens = ?, tamanhos = ?, cores = ?, peso = ?, dimensoes = ?, slug = ?, texto_whatsapp = ?
     WHERE id = ?
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(tamanhos || []), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp, id);
+  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp, id);
+  await saveProductVariations(id, variacoes);
   await attachAssets(nextKeys.filter((key) => !previousKeys.includes(key)), id)
     .catch((error) => console.error('Falha ao associar mídia; a limpeza posterior tentará novamente:', error));
   await queueAndDeleteAssets(previousKeys.filter((key) => !nextKeys.includes(key)), id)

@@ -85,7 +85,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
           <button type="button" onClick={() => setSearchOpen((open) => !open)} aria-label={searchOpen ? 'Fechar busca' : 'Pesquisar produtos'} className="text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
             <Search className="w-5 h-5" />
           </button>
-          <button type="button" onClick={() => setBagOpen(true)} aria-label={`Abrir sacola para provar com ${itemCount} ${itemCount === 1 ? 'peça' : 'peças'}`} className="relative text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
+          <button type="button" onClick={() => setBagOpen(true)} aria-label={`Abrir sacola para experimentar com ${itemCount} ${itemCount === 1 ? 'peça' : 'peças'}`} className="relative text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
             <ShoppingBag className="w-5 h-5" />
             {itemCount > 0 && <span style={{ backgroundColor: config?.cor_primaria || '#4A5D4E' }} className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white">{itemCount}</span>}
           </button>

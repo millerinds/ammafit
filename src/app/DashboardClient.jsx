@@ -47,22 +47,20 @@ export default function DashboardClient({ metrics, products, config, categories 
   return (
     <div suppressHydrationWarning className="min-h-screen bg-background text-[#1A1A1A] font-sans selection:bg-[#4A5D4E]/20 selection:text-[#1A1A1A]">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#1A1A1A] text-white rounded-lg flex items-center justify-center shadow-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1A1A1A] text-white shadow-md">
               <Package className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-bold text-[#1A1A1A]">
-              AmmaFit Admin
-            </h1>
+            <h1 className="truncate text-base font-bold text-[#1A1A1A] sm:text-xl">AmmaFit Admin</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
             <div className="text-sm font-medium text-slate-500 hidden sm:block">
               Catálogo via WhatsApp
             </div>
             <Link
               href="/admin/condicionais"
-              className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 sm:px-3"
               title="Peças que estão fora para prova"
             >
               <Clock className="w-4 h-4" />
@@ -70,7 +68,7 @@ export default function DashboardClient({ metrics, products, config, categories 
             </Link>
             <button
               onClick={() => setIsCategoryOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:px-3"
               title="Criar categorias"
             >
               <FolderPlus className="w-4 h-4" />
@@ -78,7 +76,7 @@ export default function DashboardClient({ metrics, products, config, categories 
             </button>
             <button
               onClick={() => setIsLayoutOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#333]"
+              className="flex shrink-0 items-center gap-2 rounded-xl bg-[#1A1A1A] px-2.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#333] sm:px-3"
               title="Personalizar layout da loja"
             >
               <Palette className="w-4 h-4" />

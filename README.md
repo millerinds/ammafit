@@ -33,10 +33,10 @@ Estas regras valem para qualquer pessoa ou assistente de IA, incluindo Claude e 
 - Página individual com cores, tamanhos, quantidade, oferta e recomendações.
 - Até 10 recomendações priorizadas por categoria, cor, tamanho e preço.
 - Tamanhos com estoque próprio: um produto, várias grades (P, M, G, 38...).
-- Sacola para provar salva em `localStorage`, permanecendo no mesmo navegador após fechar o site.
-- Solicitação de condicional por peça ou pela sacola inteira, sempre com tela de confirmação.
-- Peça sem disponibilidade e com unidade fora para prova aparece como **Em condicional**, não como esgotada.
-- Uma única conversa no WhatsApp com a relação completa das peças solicitadas.
+- Sacola para experimentar salva em `localStorage`, permanecendo no mesmo navegador após fechar o site.
+- Pedido para experimentar por peça ou pela sacola inteira, sempre com tela de confirmação.
+- Peça sem disponibilidade e com unidade fora para prova aparece como **Reservada / Com outra cliente**, não como esgotada.
+- Uma única conversa no WhatsApp com a relação completa das peças, escrita como uma cliente escreveria.
 - Compartilhamento de produtos pelo recurso nativo do aparelho ou cópia do link.
 
 ### Painel administrativo
@@ -83,13 +83,28 @@ Arquivos principais:
 | `src/lib/auth.js` | Validação de credenciais e sessão assinada. |
 | `src/app/condicional-actions.js` | Reserva, consulta e baixa de peças em condicional. |
 | `src/lib/estoque.js` | Variações de tamanho, disponibilidade e sincronia de `produtos.estoque`. |
-| `src/components/store/BagProvider.jsx` | Estado persistente da sacola para provar. |
+| `src/components/store/BagProvider.jsx` | Estado persistente da sacola para experimentar. |
 | `src/components/store/BagDrawer.jsx` | Sacola, confirmação e pedido pelo WhatsApp. |
-| `src/components/store/CondicionalConfirmModal.jsx` | Confirmação antes de reservar uma peça. |
+| `src/components/store/ConfirmTryOnModal.jsx` | Confirmação da peça avulsa e da sacola inteira. |
+| `src/components/store/try-on-message.js` | Texto das mensagens de WhatsApp. |
 | `src/app/admin/condicionais/` | Painel de acompanhamento dos condicionais. |
 | `migrations/` | Histórico imutável do esquema e dados iniciais. |
 | `wrangler.jsonc` | Worker, bindings, D1 e compatibilidade do runtime. |
 | `open-next.config.ts` | Adaptador do Next.js para Cloudflare. |
+
+## Vocabulário: loja x painel
+
+O termo **condicional** é interno. Na loja, a cliente lê sempre a mesma linguagem:
+
+| Situação | Texto na loja | Texto no painel |
+| --- | --- | --- |
+| Ação principal | Quero experimentar | — |
+| Guardar para depois | Adicionar à sacola | — |
+| Sacola | Sacola para experimentar | — |
+| Peça fora para prova (selo) | Reservada | Em condicional |
+| Peça fora para prova (rótulo) | Com outra cliente | Em condicional |
+| Página do produto | Reservada para experimentar | — |
+| Seção do painel | — | Condicionais |
 
 ## Como o estoque e os condicionais funcionam
 

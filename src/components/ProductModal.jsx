@@ -31,7 +31,7 @@ function getInitialFormData(product, isEdit) {
     return {
       nome: '', descricao: '', categoria: 'Leggings', preco: '', preco_original: '', oferta_ativa: false, preco_custo: '', sku: '', estoque: '',
       imagem_refs: [], tamanhos: [], cores: [], peso: '', dimensoes: { width: '', height: '', length: '' }, slug: '',
-      variacoes: []
+      texto_whatsapp: '', variacoes: []
     };
   }
 
@@ -51,6 +51,7 @@ function getInitialFormData(product, isEdit) {
     peso: product.peso || '',
     dimensoes: product.dimensoes || { width: '', height: '', length: '' },
     slug: product.slug || '',
+    texto_whatsapp: product.texto_whatsapp || '',
     variacoes: (product.variacoes || []).map((variation) => ({
       id: variation.id,
       tamanho: variation.tamanho,
@@ -69,6 +70,7 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
   const [imageItems, setImageItems] = useState(() => formData.imagem_refs.map((ref, index) => ({ kind: 'existing', ref, preview: product?.imagens?.[index] || ref.url })));
   const [isDragging, setIsDragging] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
   const fileInputRef = useRef(null);
   const imageItemsRef = useRef(imageItems);
   const [newSize, setNewSize] = useState('');
@@ -199,6 +201,7 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSaveError('');
     setSaveMessage('Validando imagens...');
     const uploadedKeys = [];
     try {
@@ -248,8 +251,7 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
     } catch (error) {
       await discardUploads(uploadedKeys);
       console.error('Erro ao salvar produto:', error);
-      alert(error.message || 'Ocorreu um erro ao salvar o produto.');
-      setSaveMessage(error.message || 'Ocorreu um erro ao salvar o produto.');
+      setSaveError(error?.message || 'Não foi possível salvar o produto. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -502,6 +504,11 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
         </div>
 
         {/* Footer */}
+        {saveError && (
+          <div className="shrink-0 border-t border-rose-100 bg-rose-50 px-6 py-3">
+            <p className="text-sm font-medium text-rose-700">{saveError}</p>
+          </div>
+        )}
         <div className="px-6 py-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
           {isEdit ? (
             <button type="button" onClick={handleDelete} disabled={isSubmitting} className="px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-medium flex items-center gap-2 transition-colors disabled:opacity-50">

@@ -54,6 +54,12 @@ function sizesFromVariations(variacoes, fallback) {
   return names.length > 0 ? names : (Array.isArray(fallback) ? fallback : []);
 }
 
+// O D1 lança erro ao receber undefined em bind(). Campos opcionais que o
+// formulário não preenche precisam virar null antes de chegar na query.
+function orNull(value) {
+  return value === undefined ? null : value;
+}
+
 function validateOffer(price, originalPrice, active) {
   if (active && (!(Number(originalPrice) > 0) || Number(originalPrice) <= Number(price))) {
     throw new Error('Em uma oferta, o preço original deve ser maior que o preço promocional.');
@@ -122,7 +128,7 @@ export async function addProduct(data) {
   const result = await run(`
     INSERT INTO produtos (nome, descricao, categoria, preco, preco_original, oferta_ativa, preco_custo, sku, estoque, imagens, tamanhos, cores, peso, dimensoes, slug, texto_whatsapp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp);
+  `, nome, orNull(descricao), orNull(categoria), preco, orNull(preco_original), oferta_ativa ? 1 : 0, orNull(preco_custo), orNull(sku), estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), orNull(peso), JSON.stringify(dimensoes || {}), orNull(slug), orNull(texto_whatsapp));
   const productId = result.meta?.last_row_id;
   // Grava a grade de tamanhos e realinha produtos.estoque com a soma das variações.
   if (productId) await saveProductVariations(productId, variacoes);
@@ -157,7 +163,7 @@ export async function updateProduct(id, data) {
     UPDATE produtos
     SET nome = ?, descricao = ?, categoria = ?, preco = ?, preco_original = ?, oferta_ativa = ?, preco_custo = ?, sku = ?, estoque = ?, imagens = ?, tamanhos = ?, cores = ?, peso = ?, dimensoes = ?, slug = ?, texto_whatsapp = ?
     WHERE id = ?
-  `, nome, descricao, categoria, preco, preco_original, oferta_ativa ? 1 : 0, preco_custo, sku, estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), peso, JSON.stringify(dimensoes || {}), slug, texto_whatsapp, id);
+  `, nome, orNull(descricao), orNull(categoria), preco, orNull(preco_original), oferta_ativa ? 1 : 0, orNull(preco_custo), orNull(sku), estoque, serializeImageReferences(imageReferences), JSON.stringify(sizes), JSON.stringify(cores || []), orNull(peso), JSON.stringify(dimensoes || {}), orNull(slug), orNull(texto_whatsapp), id);
   await saveProductVariations(id, variacoes);
   await attachAssets(nextKeys.filter((key) => !previousKeys.includes(key)), id)
     .catch((error) => console.error('Falha ao associar mídia; a limpeza posterior tentará novamente:', error));

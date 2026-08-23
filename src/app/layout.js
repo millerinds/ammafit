@@ -1,5 +1,5 @@
 import "./globals.css";
-import { CartProvider } from "@/components/store/CartProvider";
+import { BagProvider } from "@/components/store/BagProvider";
 
 export const metadata = {
   title: "Amma Fit - Loja Online",
@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <CartProvider>{children}</CartProvider>
+        <BagProvider>{children}</BagProvider>
       </body>
     </html>
   );

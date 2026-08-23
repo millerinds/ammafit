@@ -10,6 +10,9 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "deploy:cloudflare": "opennextjs-cloudflare deploy",
+    "upload:cloudflare": "opennextjs-cloudflare upload",
     "db:migrate:local": "wrangler d1 migrations apply ammafit-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply ammafit-db --remote"
   },

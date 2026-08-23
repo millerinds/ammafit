@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Search, Menu, X, ShoppingBag } from 'lucide-react';
-import CartDrawer from './CartDrawer';
-import { useCart } from './CartProvider';
+import BagDrawer from './BagDrawer';
+import { useBag } from './BagProvider';
 
 export default function StoreNavbar({ activeCategory, onCategoryChange, config, categories = [], searchQuery = '', onSearchChange }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(Boolean(searchQuery));
   const searchInputRef = useRef(null);
-  const { itemCount } = useCart();
+  const { itemCount } = useBag();
   const categoryNames = categories.map((category) => category.nome);
   const configuredCategories = (config?.categorias_menu || []).filter((name) => categoryNames.includes(name));
   const mainCategories = configuredCategories.length > 0 ? configuredCategories : categoryNames.slice(0, 5);
@@ -51,7 +51,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
                 style={{ '--logo-mobile': `${config.logo_largura_mobile || 120}px`, '--logo-desktop': `${config.logo_largura_desktop || 160}px` }}
                 className="max-h-12 w-[var(--logo-mobile)] object-contain object-left lg:w-[var(--logo-desktop)]"
               />
-            ) : 'AMMA FIT'}
+            ) : (config?.cabecalho_texto || 'AMMA FIT')}
           </button>
         </div>
 
@@ -85,7 +85,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
           <button type="button" onClick={() => setSearchOpen((open) => !open)} aria-label={searchOpen ? 'Fechar busca' : 'Pesquisar produtos'} className="text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
             <Search className="w-5 h-5" />
           </button>
-          <button type="button" onClick={() => setCartOpen(true)} aria-label={`Abrir carrinho com ${itemCount} itens`} className="relative text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
+          <button type="button" onClick={() => setBagOpen(true)} aria-label={`Abrir sacola para experimentar com ${itemCount} ${itemCount === 1 ? 'peça' : 'peças'}`} className="relative text-[#1A1A1A] hover:bg-slate-50 p-2 rounded-full transition-colors">
             <ShoppingBag className="w-5 h-5" />
             {itemCount > 0 && <span style={{ backgroundColor: config?.cor_primaria || '#4A5D4E' }} className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white">{itemCount}</span>}
           </button>
@@ -131,7 +131,7 @@ export default function StoreNavbar({ activeCategory, onCategoryChange, config, 
           </nav>
         </div>
       )}
-      <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} config={config} />
+      <BagDrawer isOpen={bagOpen} onClose={() => setBagOpen(false)} config={config} />
     </header>
   );
 }

@@ -32,14 +32,19 @@ Estas regras valem para qualquer pessoa ou assistente de IA, incluindo Claude e 
 - Links dos banners para produto, categoria ou seção da loja.
 - Página individual com cores, tamanhos, quantidade, oferta e recomendações.
 - Até 10 recomendações priorizadas por categoria, cor, tamanho e preço.
-- Carrinho salvo em `localStorage`, permanecendo no mesmo navegador após fechar o site.
-- Pedido de um produto ou de todo o carrinho pelo WhatsApp.
+- Tamanhos com estoque próprio: um produto, várias grades (P, M, G, 38...).
+- Sacola para experimentar salva em `localStorage`, permanecendo no mesmo navegador após fechar o site.
+- Pedido para experimentar por peça ou pela sacola inteira, sempre com tela de confirmação.
+- Peça sem disponibilidade e com unidade fora para prova aparece como **Reservada / Com outra cliente**, não como esgotada.
+- Uma única conversa no WhatsApp com a relação completa das peças, escrita como uma cliente escreveria.
 - Compartilhamento de produtos pelo recurso nativo do aparelho ou cópia do link.
 
 ### Painel administrativo
 
 - Acesso protegido por usuário e senha.
 - Cadastro, edição e exclusão de produtos.
+- Estoque por tamanho, com disponível, em condicional e vendidas em cada grade.
+- Seção **Condicionais** em `/admin/condicionais`, resolvendo cada peça como vendida, devolvida ou cancelada.
 - Cadastro e exclusão de categorias.
 - Busca administrativa por nome, SKU ou categoria.
 - Configuração do número e da mensagem do WhatsApp.
@@ -76,11 +81,59 @@ Arquivos principais:
 | `src/app/DashboardClient.jsx` | Interface principal do admin. |
 | `src/lib/db.js` | Binding e helpers assíncronos do Cloudflare D1. |
 | `src/lib/auth.js` | Validação de credenciais e sessão assinada. |
-| `src/components/store/CartProvider.jsx` | Estado persistente do carrinho. |
-| `src/components/store/CartDrawer.jsx` | Carrinho e pedido pelo WhatsApp. |
+| `src/app/condicional-actions.js` | Reserva, consulta e baixa de peças em condicional. |
+| `src/lib/estoque.js` | Variações de tamanho, disponibilidade e sincronia de `produtos.estoque`. |
+| `src/components/store/BagProvider.jsx` | Estado persistente da sacola para experimentar. |
+| `src/components/store/BagDrawer.jsx` | Sacola, confirmação e pedido pelo WhatsApp. |
+| `src/components/store/ConfirmTryOnModal.jsx` | Confirmação da peça avulsa e da sacola inteira. |
+| `src/components/store/try-on-message.js` | Texto das mensagens de WhatsApp. |
+| `src/app/admin/condicionais/` | Painel de acompanhamento dos condicionais. |
 | `migrations/` | Histórico imutável do esquema e dados iniciais. |
 | `wrangler.jsonc` | Worker, bindings, D1 e compatibilidade do runtime. |
 | `open-next.config.ts` | Adaptador do Next.js para Cloudflare. |
+
+## Vocabulário: loja x painel
+
+O termo **condicional** é interno. Na loja, a cliente lê sempre a mesma linguagem:
+
+| Situação | Texto na loja | Texto no painel |
+| --- | --- | --- |
+| Ação principal | Quero experimentar | — |
+| Guardar para depois | Adicionar à sacola | — |
+| Sacola | Sacola para experimentar | — |
+| Peça fora para prova (selo) | Reservada | Em condicional |
+| Peça fora para prova (rótulo) | Com outra cliente | Em condicional |
+| Página do produto | Reservada para experimentar | — |
+| Seção do painel | — | Condicionais |
+
+## Como o estoque e os condicionais funcionam
+
+Cada tamanho de um produto é uma linha em `produto_variacoes` com o próprio `estoque_fisico`.
+A disponibilidade **não** fica guardada em coluna: é sempre calculada, o que impede que um
+contador fique dessincronizado do que realmente está fora para prova.
+
+```text
+reservado  = peças de condicional_itens com status 'em_condicional'
+disponivel = estoque_fisico - reservado
+```
+
+| Ação no painel | Efeito |
+| --- | --- |
+| Devolvido | O item sai de `em_condicional`. O estoque físico não muda, então a peça volta ao disponível. |
+| Cancelar | Igual a devolvido: a peça volta ao disponível. |
+| Vendido | Baixa `estoque_fisico` em 1 e soma 1 em `vendido`. A peça não retorna à disponibilidade. |
+
+Cada unidade solicitada vira uma linha própria em `condicional_itens`: uma cliente que levou
+15 peças pode ter 2 marcadas como vendidas e 13 como devolvidas, item a item.
+
+A reserva é gravada por um único comando SQL que só insere se ainda houver unidade disponível.
+Duas clientes que confirmam ao mesmo tempo a última peça não conseguem reservar as duas: a
+segunda recebe o aviso de que a peça acabou de sair. A sacola é tudo ou nada — se qualquer
+peça ficou indisponível, o condicional inteiro é desfeito e as peças que faltaram são
+informadas na tela.
+
+`produtos.estoque` continua existindo como total agregado e passa a ser sempre a soma das
+variações, para que busca, métricas e telas antigas continuem funcionando.
 
 ## Preparação do ambiente local
 
@@ -355,9 +408,38 @@ O script `npm run build` já inicia o Next.js com até 3 GB de heap. Feche proce
 ## Observações de segurança e operação
 
 - O carrinho pertence ao navegador do cliente e não é armazenado no D1.
-- Imagens de produtos, banners e logo são URLs externas; não há upload de arquivos para o Worker atualmente.
+- Imagens de produtos podem ser URLs externas ou objetos privados no R2, servidos pelo Worker ou por um domínio público opcional. Banners e logo continuam usando URLs.
 - O D1 é a fonte de verdade de produtos, categorias, métricas e layout.
 - O cookie administrativo é `HttpOnly`, `Secure` em produção e `SameSite=Strict`.
 - A sessão administrativa dura 8 horas.
 - Os snapshots e limites da Cloudflare não substituem um plano de backup dos dados importantes.
 - Antes de uma mudança grande, exporte o D1 ou estabeleça um procedimento de backup e restauração.
+
+## Imagens de produtos no Cloudflare R2
+
+O painel otimiza as imagens para WebP no navegador (até 2000 px no maior lado). Produtos enviam os arquivos ao salvar; logo e slides podem ser enviados no editor de layout. O D1 armazena referências, nunca os bytes. Registros antigos com arrays de URLs continuam compatíveis.
+
+Crie o bucket uma vez e aplique a nova migração antes de publicar o código:
+
+```bash
+npx wrangler r2 bucket create ammafit-product-images
+npm run db:migrate:remote
+```
+
+O binding `PRODUCT_IMAGES` já está declarado em `wrangler.jsonc`. Sem configuração adicional, as imagens são servidas pela rota `/media/products/...`. Para usar um domínio próprio, conecte-o ao bucket em **Cloudflare Dashboard → R2 → ammafit-product-images → Settings → Custom Domains** e defina a URL, sem barra final, no Worker:
+
+```text
+R2_PUBLIC_BASE_URL=https://imagens.seudominio.com
+```
+
+Essa variável é opcional e não contém credenciais. O acesso de escrita usa exclusivamente o binding do Worker. Uploads interrompidos são registrados em `media_assets`; o painel tenta novamente a limpeza de arquivos pendentes e processa no máximo 50 por execução.
+
+Os comandos explícitos do fluxo OpenNext são:
+
+```bash
+npm run build:cloudflare
+npm run upload:cloudflare
+npm run deploy:cloudflare
+```
+
+Os dois últimos não devem ser executados em produção sem revisar a migração, bindings e secrets.

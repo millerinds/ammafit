@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, Save, Trash2, Info, Image as ImageIcon, Tag, Box, Truck, Plus, XCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Save, Trash2, Info, Image as ImageIcon, Tag, Box, XCircle, Loader2, UploadCloud, ChevronLeft, ChevronRight } from 'lucide-react';
 import { addProduct, updateProduct, deleteProduct, registerAccess } from '@/app/actions';
 import SearchableSelect from './SearchableSelect';
 
@@ -30,7 +30,8 @@ function getInitialFormData(product, isEdit) {
   if (!isEdit || !product) {
     return {
       nome: '', descricao: '', categoria: 'Leggings', preco: '', preco_original: '', oferta_ativa: false, preco_custo: '', sku: '', estoque: '',
-      imagens: [], tamanhos: [], cores: [], peso: '', dimensoes: { width: '', height: '', length: '' }, slug: ''
+      imagem_refs: [], tamanhos: [], cores: [], peso: '', dimensoes: { width: '', height: '', length: '' }, slug: '',
+      texto_whatsapp: '', variacoes: []
     };
   }
 
@@ -44,12 +45,20 @@ function getInitialFormData(product, isEdit) {
     preco_custo: product.preco_custo || '',
     sku: product.sku || '',
     estoque: product.estoque || '',
-    imagens: product.imagens || [],
+    imagem_refs: product.imagem_refs || (product.imagens || []).map((url) => ({ storage: 'external', url })),
     tamanhos: product.tamanhos || [],
     cores: product.cores || [],
     peso: product.peso || '',
     dimensoes: product.dimensoes || { width: '', height: '', length: '' },
-    slug: product.slug || ''
+    slug: product.slug || '',
+    texto_whatsapp: product.texto_whatsapp || '',
+    variacoes: (product.variacoes || []).map((variation) => ({
+      id: variation.id,
+      tamanho: variation.tamanho,
+      estoque_fisico: variation.estoque_fisico,
+      reservado: variation.reservado,
+      vendido: variation.vendido,
+    }))
   };
 }
 
@@ -58,6 +67,12 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState(() => getInitialFormData(product, isEdit));
   const [newImage, setNewImage] = useState('');
+  const [imageItems, setImageItems] = useState(() => formData.imagem_refs.map((ref, index) => ({ kind: 'existing', ref, preview: product?.imagens?.[index] || ref.url })));
+  const [isDragging, setIsDragging] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const fileInputRef = useRef(null);
+  const imageItemsRef = useRef(imageItems);
   const [newSize, setNewSize] = useState('');
   const [newColor, setNewColor] = useState('');
 
@@ -66,6 +81,11 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
       registerAccess(product.id).catch(console.error);
     }
   }, [isEdit, product]);
+
+  useEffect(() => { imageItemsRef.current = imageItems; }, [imageItems]);
+  useEffect(() => () => {
+    imageItemsRef.current.forEach((item) => { if (item.kind === 'new') URL.revokeObjectURL(item.preview); });
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -78,14 +98,93 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
   };
 
   const handleAddImage = () => {
-    if (newImage && !formData.imagens.includes(newImage)) {
-      setFormData(prev => ({ ...prev, imagens: [...prev.imagens, newImage] }));
+    const url = newImage.trim();
+    if (url && imageItems.length < 10 && !imageItems.some((item) => item.preview === url)) {
+      setImageItems((items) => [...items, { kind: 'existing', ref: { storage: 'external', url }, preview: url }]);
       setNewImage('');
     }
   };
 
   const handleRemoveImage = (index) => {
-    setFormData(prev => ({ ...prev, imagens: prev.imagens.filter((_, i) => i !== index) }));
+    setImageItems((items) => {
+      const removed = items[index];
+      if (removed?.kind === 'new') URL.revokeObjectURL(removed.preview);
+      return items.filter((_, i) => i !== index);
+    });
+  };
+
+  const addFiles = (files) => {
+    const available = Math.max(0, 10 - imageItems.length);
+    const selected = [...files].slice(0, available).map((file) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type);
+      return { kind: 'new', file, preview: URL.createObjectURL(file), error: allowed ? '' : 'Formato não permitido.' };
+    });
+    setImageItems((items) => [...items, ...selected]);
+    if (files.length > available) setSaveMessage('O limite é de 10 imagens por produto.');
+  };
+
+  const moveImage = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= imageItems.length) return;
+    setImageItems((items) => {
+      const reordered = [...items];
+      [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+      return reordered;
+    });
+  };
+
+  const optimizeImage = async (file) => {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
+    if (!blob) throw new Error(`Não foi possível otimizar ${file.name}.`);
+    if (blob.size > 5 * 1024 * 1024) throw new Error(`${file.name} continua maior que 5 MB após a otimização.`);
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, '')}.webp`, { type: 'image/webp' });
+  };
+
+  const uploadImage = async (file) => {
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch('/api/admin/product-images', { method: 'POST', body });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `Falha ao enviar ${file.name}.`);
+    return result;
+  };
+
+  const discardUploads = async (keys) => {
+    if (!keys.length) return;
+    await fetch('/api/admin/product-images', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keys }) }).catch(() => {});
+  };
+
+  const totalEstoqueFisico = formData.variacoes.reduce((total, variation) => total + (Number(variation.estoque_fisico) || 0), 0);
+
+  const handleAddSize = (value, setter) => {
+    const tamanho = String(value || '').trim();
+    if (!tamanho) return;
+
+    const exists = formData.variacoes.some((variation) => variation.tamanho.toLocaleLowerCase('pt-BR') === tamanho.toLocaleLowerCase('pt-BR'));
+    if (exists) return;
+
+    setFormData((prev) => ({ ...prev, variacoes: [...prev.variacoes, { tamanho, estoque_fisico: 0, reservado: 0 }] }));
+    setter('');
+  };
+
+  const handleSizeStockChange = (index, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      variacoes: prev.variacoes.map((variation, i) =>
+        i === index ? { ...variation, estoque_fisico: Math.max(0, Math.floor(Number(value) || 0)) } : variation
+      ),
+    }));
+  };
+
+  const handleRemoveSize = (index) => {
+    setFormData((prev) => ({ ...prev, variacoes: prev.variacoes.filter((_, i) => i !== index) }));
   };
 
   const handleAddVariant = (type, val, setter) => {
@@ -102,14 +201,44 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSaveError('');
+    setSaveMessage('Validando imagens...');
+    const uploadedKeys = [];
     try {
+      if (imageItems.some((item) => item.error)) throw new Error('Remova os arquivos rejeitados antes de salvar.');
+      const imageRefs = [];
+      for (let index = 0; index < imageItems.length; index += 1) {
+        const item = imageItems[index];
+        if (item.kind === 'existing') {
+          imageRefs.push(item.ref);
+          continue;
+        }
+        setSaveMessage(`Otimizando e enviando imagem ${index + 1} de ${imageItems.length}...`);
+        let result;
+        try {
+          result = await uploadImage(await optimizeImage(item.file));
+        } catch (error) {
+          setImageItems((items) => items.map((candidate) => candidate === item ? { ...candidate, error: error.message || 'Falha ao processar esta imagem.' } : candidate));
+          throw error;
+        }
+        imageRefs.push(result.reference);
+        uploadedKeys.push(result.reference.key);
+      }
+      setSaveMessage('Salvando produto...');
       const data = {
         ...formData,
+        imagem_refs: imageRefs,
         preco: parseFloat(formData.preco) || 0,
         preco_original: formData.oferta_ativa ? parseFloat(formData.preco_original) || 0 : null,
         oferta_ativa: Boolean(formData.oferta_ativa),
         preco_custo: parseFloat(formData.preco_custo) || 0,
-        estoque: parseInt(formData.estoque, 10) || 0,
+        // produtos.estoque continua sendo o total; quem manda agora são as variações.
+        estoque: totalEstoqueFisico,
+        variacoes: formData.variacoes.map((variation) => ({
+          tamanho: variation.tamanho,
+          estoque_fisico: Math.max(0, Math.floor(Number(variation.estoque_fisico) || 0)),
+        })),
+        tamanhos: formData.variacoes.map((variation) => variation.tamanho),
         peso: parseFloat(formData.peso) || 0,
       };
 
@@ -120,15 +249,16 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
       }
       onClose();
     } catch (error) {
+      await discardUploads(uploadedKeys);
       console.error('Erro ao salvar produto:', error);
-      alert(error.message || 'Ocorreu um erro ao salvar o produto.');
+      setSaveError(error?.message || 'Não foi possível salvar o produto. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (confirm('Tem certeza que deseja excluir este produto?')) {
+    if (confirm('Tem certeza que deseja excluir este produto? As imagens armazenadas deste produto também serão apagadas.')) {
       setIsSubmitting(true);
       try {
         await deleteProduct(product.id);
@@ -208,25 +338,44 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
               {/* ABA MÍDIA */}
               {activeTab === 'midia' && (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Adicionar URL da Imagem</label>
+                  <div
+                    onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(event) => { event.preventDefault(); setIsDragging(false); addFiles(event.dataTransfer.files); }}
+                    className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${isDragging ? 'border-[#4A5D4E] bg-emerald-50' : 'border-slate-300 bg-slate-50'}`}
+                  >
+                    <UploadCloud className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                    <p className="text-sm font-medium text-slate-700">Arraste fotos aqui ou selecione no aparelho</p>
+                    <p className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP ou AVIF · até 10 imagens</p>
+                    <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple className="hidden" onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={imageItems.length >= 10} className="mt-3 rounded-xl bg-[#1A1A1A] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Selecionar imagens</button>
+                  </div>
+                  <details className="rounded-xl border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-slate-600">Adicionar por URL externa</summary>
                     <div className="flex gap-2">
                       <input type="url" value={newImage} onChange={e => setNewImage(e.target.value)} className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1A1A1A] outline-none" placeholder="https://exemplo.com/foto.jpg" />
                       <button type="button" onClick={handleAddImage} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium">Adicionar</button>
                     </div>
-                  </div>
-                  {formData.imagens.length > 0 && (
+                  </details>
+                  {imageItems.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
-                      {formData.imagens.map((url, i) => (
-                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
-                          <img src={url} alt="preview" className="w-full h-full object-cover" />
-                          <button type="button" onClick={() => handleRemoveImage(i)} className="absolute top-2 right-2 bg-white/90 text-rose-500 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-rose-50">
+                      {imageItems.map((item, i) => (
+                        <div key={`${item.preview}-${i}`} className={`relative aspect-square rounded-xl overflow-hidden border group ${item.error ? 'border-rose-400' : 'border-slate-200'}`}>
+                          <img src={item.preview} alt={`Imagem ${i + 1}`} className="w-full h-full object-cover" />
+                          <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-slate-700 shadow">{i === 0 ? 'CAPA' : i + 1}</span>
+                          <button type="button" aria-label={`Remover imagem ${i + 1}`} onClick={() => handleRemoveImage(i)} className="absolute top-2 right-2 bg-white/90 text-rose-500 p-1.5 rounded-full shadow-sm hover:bg-rose-50">
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          <div className="absolute bottom-2 left-2 flex gap-1">
+                            <button type="button" aria-label="Mover imagem para trás" disabled={i === 0} onClick={() => moveImage(i, -1)} className="rounded-full bg-white/90 p-1.5 text-slate-700 shadow disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+                            <button type="button" aria-label="Mover imagem para frente" disabled={i === imageItems.length - 1} onClick={() => moveImage(i, 1)} className="rounded-full bg-white/90 p-1.5 text-slate-700 shadow disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+                          </div>
+                          {item.error && <p className="absolute inset-x-0 bottom-0 bg-rose-600/90 p-1 text-center text-[10px] text-white">{item.error}</p>}
                         </div>
                       ))}
                     </div>
                   )}
+                  <p className="text-xs text-slate-500">{imageItems.length}/10 imagens. A primeira será usada como capa.</p>
                 </div>
               )}
 
@@ -262,8 +411,11 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
                       <input type="text" name="sku" value={formData.sku} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1A1A1A] outline-none" placeholder="EX-1234" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Quantidade em Estoque *</label>
-                      <input type="number" name="estoque" required step="1" value={formData.estoque} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1A1A1A] outline-none" />
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Estoque total</label>
+                      <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 font-semibold text-slate-600">
+                        {totalEstoqueFisico} {totalEstoqueFisico === 1 ? 'peça' : 'peças'}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Some as quantidades na aba <strong>Variantes</strong>, por tamanho.</p>
                     </div>
                   </div>
                 </div>
@@ -273,18 +425,59 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
               {activeTab === 'variantes' && (
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    <label className="block text-sm font-medium text-slate-700">Tamanhos Disponíveis</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={newSize} onChange={e => setNewSize(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddVariant('tamanhos', newSize, setNewSize))} className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1A1A1A] outline-none" placeholder="Ex: P, M, G" />
-                      <button type="button" onClick={() => handleAddVariant('tamanhos', newSize, setNewSize)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium">Add</button>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Tamanhos e estoque</label>
+                      <p className="mt-1 text-xs text-slate-500">Cada tamanho tem a própria quantidade. Um produto, várias grades.</p>
                     </div>
-                    {formData.tamanhos.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {formData.tamanhos.map((size, i) => (
-                          <div key={i} className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-medium border border-slate-200">
-                            {size} <button type="button" onClick={() => handleRemoveVariant('tamanhos', i)} className="text-slate-400 hover:text-rose-500"><XCircle className="w-3.5 h-3.5" /></button>
-                          </div>
-                        ))}
+                    <div className="flex gap-2">
+                      <input type="text" value={newSize} onChange={e => setNewSize(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSize(newSize, setNewSize))} className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1A1A1A] outline-none" placeholder="Ex: P, M, G, 38" />
+                      <button type="button" onClick={() => handleAddSize(newSize, setNewSize)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium">Add</button>
+                    </div>
+
+                    {formData.variacoes.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
+                        Nenhum tamanho cadastrado. Sem tamanhos, o produto fica com a grade &quot;Único&quot;.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                        {formData.variacoes.map((variation, i) => {
+                          const reservado = Number(variation.reservado) || 0;
+                          const disponivel = Math.max(0, (Number(variation.estoque_fisico) || 0) - reservado);
+
+                          return (
+                            <div key={variation.id ?? `novo-${i}`} className="flex flex-wrap items-center gap-3 px-3 py-3 sm:flex-nowrap">
+                              <span className="min-w-14 rounded-lg bg-slate-100 px-3 py-1.5 text-center text-sm font-bold text-slate-700">{variation.tamanho}</span>
+
+                              <label className="flex items-center gap-2 text-xs text-slate-500">
+                                <span className="whitespace-nowrap">Estoque físico</span>
+                                <input
+                                  type="number"
+                                  min={reservado}
+                                  step="1"
+                                  value={variation.estoque_fisico}
+                                  onChange={(event) => handleSizeStockChange(i, event.target.value)}
+                                  className="w-20 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#1A1A1A]"
+                                />
+                              </label>
+
+                              <div className="flex flex-1 flex-wrap items-center gap-2 text-[11px] font-medium">
+                                {reservado > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{reservado} em condicional</span>}
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{disponivel} disponível(is)</span>
+                                {Number(variation.vendido) > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">{variation.vendido} vendida(s)</span>}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSize(i)}
+                                disabled={reservado > 0}
+                                title={reservado > 0 ? 'Há peças em condicional neste tamanho' : 'Remover tamanho'}
+                                className="text-slate-400 transition-colors hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-30"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -311,6 +504,11 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
         </div>
 
         {/* Footer */}
+        {saveError && (
+          <div className="shrink-0 border-t border-rose-100 bg-rose-50 px-6 py-3">
+            <p className="text-sm font-medium text-rose-700">{saveError}</p>
+          </div>
+        )}
         <div className="px-6 py-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
           {isEdit ? (
             <button type="button" onClick={handleDelete} disabled={isSubmitting} className="px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-medium flex items-center gap-2 transition-colors disabled:opacity-50">
@@ -324,7 +522,7 @@ function ProductModalContent({ onClose, product, isEdit, categories }) {
             </button>
             <button form="productForm" type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white rounded-xl font-medium flex items-center gap-2 transition-all active:scale-95 disabled:opacity-80 disabled:cursor-not-allowed">
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {isSubmitting ? 'Salvando...' : 'Salvar Produto'}
+              {isSubmitting ? (saveMessage || 'Salvando...') : 'Salvar Produto'}
             </button>
           </div>
         </div>

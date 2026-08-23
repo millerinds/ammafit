@@ -9,6 +9,11 @@ export default function StoreProductCard({ product }) {
   const primaryImage = (product.imagens && product.imagens.length > 0) 
     ? product.imagens[0] 
     : product.imagem_url || 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=400&auto=format&fit=crop';
+  const disponivel = Number(product.disponivel_total) || 0;
+  const reservado = Number(product.reservado_total) || 0;
+  // Peça com outra cliente continua no catálogo: só muda o rótulo.
+  const reservadaParaProva = disponivel === 0 && reservado > 0;
+  const esgotado = disponivel === 0 && reservado === 0;
   const hasOffer = Boolean(product.oferta_ativa) && Number(product.preco_original) > Number(product.preco);
   const discount = hasOffer ? Math.round((1 - Number(product.preco) / Number(product.preco_original)) * 100) : 0;
 
@@ -43,12 +48,18 @@ export default function StoreProductCard({ product }) {
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
         
         {/* Badge de Lançamento ou Categoria (Opcional) */}
-        {product.categoria && (
+        {product.categoria && !reservadaParaProva && (
           <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full shadow-sm">
             <span className="text-[10px] font-bold text-[#1A1A1A] uppercase tracking-wider">{product.categoria}</span>
           </div>
         )}
-        {hasOffer && <div className="absolute right-3 top-3 rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">-{discount}%</div>}
+        {hasOffer && !reservadaParaProva && <div className="absolute right-3 top-3 rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">-{discount}%</div>}
+        {reservadaParaProva && (
+          <div className="absolute right-3 top-3 whitespace-nowrap rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Reservada
+          </div>
+        )}
+        {esgotado && <div className="absolute right-3 top-3 rounded-full bg-slate-700 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">Esgotado</div>}
       </div>
 
       <div className="flex flex-col">
@@ -58,9 +69,19 @@ export default function StoreProductCard({ product }) {
           <span className={`text-sm ${hasOffer ? 'font-bold text-rose-600' : 'text-slate-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.preco)}</span>
         </div>
         
-        <span className="mt-3 block w-full py-2 bg-white border border-[#1A1A1A] text-[#1A1A1A] rounded-xl text-center font-medium text-sm group-hover:bg-[#1A1A1A] group-hover:text-white transition-all duration-300">
-          Tenho Interesse
-        </span>
+        {reservadaParaProva ? (
+          <span className="mt-3 block w-full rounded-xl border border-amber-200 bg-amber-50 py-2 text-center text-sm font-medium text-amber-700">
+            Com outra cliente
+          </span>
+        ) : esgotado ? (
+          <span className="mt-3 block w-full rounded-xl border border-slate-200 bg-slate-50 py-2 text-center text-sm font-medium text-slate-400">
+            Esgotado
+          </span>
+        ) : (
+          <span className="mt-3 block w-full py-2 bg-white border border-[#1A1A1A] text-[#1A1A1A] rounded-xl text-center font-medium text-sm group-hover:bg-[#1A1A1A] group-hover:text-white transition-all duration-300">
+            Quero experimentar
+          </span>
+        )}
       </div>
       </Link>
       <button type="button" onClick={handleShare} aria-label={`Compartilhar ${product.nome}`} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900">

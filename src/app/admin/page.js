@@ -2,11 +2,13 @@ import DashboardClient from '../DashboardClient';
 import { getProducts, getMetrics, getConfig, getCategories } from '../actions';
 import { redirect } from 'next/navigation';
 import { isAdminAuthenticated } from '@/lib/auth';
+import { cleanupMediaAssets } from '@/lib/product-images';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminHome() {
   if (!(await isAdminAuthenticated())) redirect('/admin/login');
+  await cleanupMediaAssets().catch((error) => console.error('Falha na limpeza de mídia:', error));
 
   const products = await getProducts();
   const metrics = await getMetrics();

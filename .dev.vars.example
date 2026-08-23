@@ -2,3 +2,5 @@ NEXTJS_ENV=development
 ADMIN_USERNAME=seu_usuario_admin
 ADMIN_PASSWORD_HASH=iteracoes:sal_base64url:hash_pbkdf2_base64url
 AUTH_SECRET=segredo_aleatorio_com_pelo_menos_32_bytes
+# Opcional: domínio público do bucket R2. Sem ele, as imagens usam /media/...
+R2_PUBLIC_BASE_URL=

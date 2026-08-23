@@ -6,6 +6,10 @@ import LoginForm from './LoginForm';
 
 export const metadata = { title: 'Login administrativo | AmmaFit' };
 
+// A página lê o cookie de sessão para redirecionar quem já está logado,
+// então não pode ser pré-renderizada como estática.
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLoginPage() {
   if (await isAdminAuthenticated()) redirect('/admin');
 

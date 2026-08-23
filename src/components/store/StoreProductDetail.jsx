@@ -22,6 +22,7 @@ export default function StoreProductDetail({ product, config }) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const { addItem } = useBag();
 
   const variacoes = useMemo(() => product?.variacoes || [], [product]);
@@ -100,6 +101,7 @@ export default function StoreProductDetail({ product, config }) {
 
     try {
       const result = await solicitarCondicional({
+        cliente_nome: customerName,
         itens: [{ variacao_id: selectedVariation.id, quantidade: quantity }],
       });
 
@@ -375,6 +377,8 @@ export default function StoreProductDetail({ product, config }) {
         onConfirm={handleConfirm}
         isSubmitting={isSubmitting}
         items={bagItem}
+        customerName={customerName}
+        onCustomerNameChange={setCustomerName}
         primaryColor={primaryColor}
       />
     </div>

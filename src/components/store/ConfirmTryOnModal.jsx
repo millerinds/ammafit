@@ -14,6 +14,8 @@ export default function ConfirmTryOnModal({
   onConfirm,
   isSubmitting = false,
   items = [],
+  customerName = '',
+  onCustomerNameChange,
   primaryColor = '#4A5D4E',
 }) {
   useEffect(() => {
@@ -97,6 +99,19 @@ export default function ConfirmTryOnModal({
               </li>
             ))}
           </ul>
+        </div>
+
+        <div className="min-h-0 shrink-0 px-6 pt-4">
+          <label className="block">
+            <span className="text-xs font-medium text-slate-500">Seu nome (opcional)</span>
+            <input
+              type="text"
+              value={customerName}
+              onChange={(event) => onCustomerNameChange?.(event.target.value)}
+              placeholder="Para a loja saber quem separou"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition-colors focus:border-slate-400"
+            />
+          </label>
         </div>
 
         <div className="shrink-0 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">

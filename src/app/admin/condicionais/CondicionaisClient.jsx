@@ -120,10 +120,10 @@ export default function CondicionaisClient({ condicionais }) {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
                   <div className="min-w-0">
                     <p className="truncate font-bold">
-                      {reserva.cliente_nome || `Condicional #${reserva.id}`}
+                      {reserva.cliente_nome || 'Cliente não identificada'}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {formatDate(reserva.criado_em)}
+                      #{reserva.id} · {formatDate(reserva.criado_em)}
                       {reserva.cliente_telefone ? ` · ${reserva.cliente_telefone}` : ''}
                     </p>
                   </div>

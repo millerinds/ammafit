@@ -16,6 +16,7 @@ export default function BagDrawer({ isOpen, onClose, config }) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [customerName, setCustomerName] = useState('');
 
   const handleClose = useCallback(() => {
     setIsConfirmOpen(false);
@@ -52,6 +53,7 @@ export default function BagDrawer({ isOpen, onClose, config }) {
 
     try {
       const result = await solicitarCondicional({
+        cliente_nome: customerName,
         itens: items.map((item) => ({ variacao_id: item.variacaoId, quantidade: item.quantity })),
       });
 
@@ -238,6 +240,8 @@ export default function BagDrawer({ isOpen, onClose, config }) {
         onConfirm={handleConfirm}
         isSubmitting={isSubmitting}
         items={items}
+        customerName={customerName}
+        onCustomerNameChange={setCustomerName}
         primaryColor={primaryColor}
       />
     </>,
